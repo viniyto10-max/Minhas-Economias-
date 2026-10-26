@@ -1,0 +1,4 @@
+{
+  "extends": "./minhas-economias-work/tsconfig.json",
+  "include": ["minhas-economias-work/src/**/*", "minhas-economias-work/server.ts", "server.ts"]
+}

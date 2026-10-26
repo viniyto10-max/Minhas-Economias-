@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "prebuild": "node ./minhas-economias-work/scripts/generate-icons.js",
+    "prebuild": "node scripts/generate-icons.js",
     "build": "vite build && esbuild server.ts --platform=node --packages=external --bundle --format=esm --outfile=server.js",
     "start": "node server.js",
     "preview": "vite preview",
@@ -40,9 +40,9 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "autoprefixer": "^10.4.21",
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.28.2",
     "tailwindcss": "^4.3.3",
-    "tsx": "^4.21.0",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite-plugin-pwa": "^2.0.0"
   }

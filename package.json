@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx minhas-economias-work/server.ts",
     "prebuild": "node minhas-economias-work/scripts/generate-icons.js",
-    "build": "vite build -c minhas-economias-work/vite.config.ts && esbuild minhas-economias-work/server.ts --platform=node --packages=external --bundle --format=esm --outfile=server.js",
+    "build": "vite build -c minhas-economias-work/vite.config.ts && node -e \"const fs = require('node:fs'); fs.cpSync('dist', 'minhas-economias-work/dist', {recursive: true, force: true});\" && esbuild minhas-economias-work/server.ts --platform=node --packages=external --bundle --format=esm --outfile=server.js",
     "start": "node server.js",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
@@ -41,9 +41,9 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "autoprefixer": "^10.4.21",
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.28.2",
     "tailwindcss": "^4.3.3",
-    "tsx": "^4.21.0",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite-plugin-pwa": "^2.0.0"
   }
