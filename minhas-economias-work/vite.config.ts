@@ -6,6 +6,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
+    root: 'minhas-economias-work',
     plugins: [
       react(),
       tailwindcss(),

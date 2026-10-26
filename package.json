@@ -4,9 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
-    "prebuild": "node scripts/generate-icons.js",
-    "build": "vite build && esbuild server.ts --platform=node --packages=external --bundle --format=esm --outfile=server.js",
+    "dev": "tsx minhas-economias-work/server.ts",
+    "prebuild": "node minhas-economias-work/scripts/generate-icons.js",
+    "build": "vite build -c minhas-economias-work/vite.config.ts && esbuild minhas-economias-work/server.ts --platform=node --packages=external --bundle --format=esm --outfile=server.js",
     "start": "node server.js",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
+    "@supabase/supabase-js": "^2.57.0",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",
     "clsx": "^2.1.1",
@@ -26,6 +27,7 @@
     "papaparse": "^5.7.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
+    "react-is": "^19.3.1",
     "react-router-dom": "^7.18.4",
     "recharts": "^3.10.1",
     "tailwind-merge": "^3.7.0",

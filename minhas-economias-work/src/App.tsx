@@ -10,6 +10,10 @@ import { ScreenHeader } from './components/common/ScreenHeader';
 import { ReceiptText, Plus, PieChart, BarChart3 } from 'lucide-react';
 
 import { MonthProvider } from './components/common/MonthContext';
+import { AuthProvider, useAuth } from './components/auth/AuthProvider';
+import LoginScreen from './components/auth/LoginScreen';
+import { supabaseConfigured } from './lib/supabase';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 const Home = lazy(() => import('./pages/Home'));
 const Lancamentos = lazy(() => import('./pages/Lancamentos'));
@@ -27,7 +31,14 @@ function PageFallback() {
   );
 }
 
-function AppLayout() {
+function AuthenticatedApp() {
+  const { user, loading, signOut } = useAuth();
+  if (loading) return <div className="min-h-[100dvh] flex items-center justify-center bg-[var(--bg-app)] text-[var(--text-secondary)]">Carregando sua conta...</div>;
+  if (!user || !supabaseConfigured) return <LoginScreen />;
+  return <AppLayout onSignOut={signOut} userEmail={user.email ?? ''} userName={String(user.user_metadata?.full_name ?? user.user_metadata?.name ?? user.email ?? 'Minha conta')} avatarUrl={String(user.user_metadata?.avatar_url ?? user.user_metadata?.picture ?? '')} />;
+}
+
+function AppLayout({ onSignOut, userEmail, userName, avatarUrl }: { onSignOut: () => Promise<void>; userEmail: string; userName: string; avatarUrl: string }) {
   const location = useLocation();
   const path = location.pathname;
   const shellRef = useRef<HTMLDivElement>(null);
@@ -59,7 +70,16 @@ function AppLayout() {
         ref={shellRef}
         className="app-shell flex h-[100dvh] w-full flex-col bg-[var(--bg-app)] overflow-hidden"
       >
-        {headerConfig && <div className="shrink-0 z-40 w-full">{headerConfig}</div>}
+        <div className="shrink-0 z-40 w-full">
+          {headerConfig}
+          <div className="flex items-center justify-between gap-3 px-4 py-2 bg-[var(--bg-card)] border-b border-[var(--border)]">
+            <div className="flex items-center gap-2 min-w-0">
+              {avatarUrl ? <img src={avatarUrl} alt="" referrerPolicy="no-referrer" className="h-8 w-8 rounded-full object-cover" /> : <div className="h-8 w-8 rounded-full bg-[var(--primary)] text-white flex items-center justify-center text-xs font-bold">{userName.slice(0,1).toUpperCase()}</div>}
+              <div className="min-w-0"><p className="text-xs font-semibold truncate">{userName}</p><p className="text-[10px] text-[var(--text-secondary)] truncate">{userEmail}</p></div>
+            </div>
+            <button onClick={() => void onSignOut()} className="text-xs font-semibold text-[var(--primary)]">Sair</button>
+          </div>
+        </div>
         <main
           ref={mainRef}
           className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden app-content w-full"
@@ -81,9 +101,5 @@ function AppLayout() {
 }
 
 export default function App() {
-  return (
-    <BrowserRouter>
-      <AppLayout />
-    </BrowserRouter>
-  );
+  return <ErrorBoundary><AuthProvider><BrowserRouter><AuthenticatedApp /></BrowserRouter></AuthProvider></ErrorBoundary>;
 }

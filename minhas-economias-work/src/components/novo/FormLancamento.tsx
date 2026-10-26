@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Send, Link as LinkIcon, ArrowUpCircle, ArrowDownCircle, Check } from 'lucide-react';
-import { enviarParaWebhook } from '../../services/webhookService';
+import { Send, ArrowUpCircle, ArrowDownCircle, Check } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../auth/AuthProvider';
 import { format } from 'date-fns';
 import { FORMAS_PAGAMENTO, isCartao } from '../../lib/constants';
 import { gerarParcelas } from '../../lib/parcelas';
@@ -27,7 +28,8 @@ const CATEGORIAS = [
 const RESPONSAVEIS = ['Ahyslla Vascaina', 'Marcos Andrade'];
 const OPCOES_PARCELAS = Array.from({ length: 24 }, (_, i) => i + 1);
 
-export default function FormLancamento({ onOpenIntegracoes }: { onOpenIntegracoes: () => void }) {
+export default function FormLancamento() {
+  const { user } = useAuth();
   const [tipo, setTipo] = useState<'Entrada' | 'Saída'>('Saída');
   const [dataHora, setDataHora] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
   const [valor, setValor] = useState('');
@@ -95,108 +97,47 @@ export default function FormLancamento({ onOpenIntegracoes }: { onOpenIntegracoe
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const webhookUrl = localStorage.getItem('webhook_url');
-    if (!webhookUrl) {
-      alert("Configure a URL do webhook para enviar os dados.");
-      onOpenIntegracoes();
-      return;
-    }
-
-    if (numValor <= 0) {
-      alert("O valor deve ser maior que zero.");
-      return;
-    }
-
+    if (!user || !supabase) { alert('Faça login novamente para salvar o lançamento.'); return; }
+    if (numValor <= 0) { alert('O valor deve ser maior que zero.'); return; }
+    if (!categoria.trim()) { alert('Selecione uma categoria.'); return; }
     const n = isCartaoSelected ? parcelas : 1;
-    if (n < 1 || n > 24) {
-      alert("O número de parcelas deve ser entre 1 e 24.");
-      return;
-    }
-
-    const parcelasCalculadas = gerarParcelas({
-      valorTotal: numValor,
-      parcelas: n,
-      dataCompra: new Date(dataHora),
-      proximaFatura: isCartaoSelected ? proximaFatura : false,
-    });
-
-    for (const p of parcelasCalculadas) {
-      if (p.valor < 0.01) {
-        alert("Nenhuma parcela pode ter valor menor que R$ 0,01.");
-        return;
-      }
-    }
-
-    const idCompra = typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-
+    if (n < 1 || n > 24) { alert('O número de parcelas deve ser entre 1 e 24.'); return; }
+    const parcelasCalculadas = gerarParcelas({ valorTotal: numValor, parcelas: n, dataCompra: new Date(dataHora), proximaFatura: isCartaoSelected ? proximaFatura : false });
+    if (parcelasCalculadas.some((p) => p.valor < 0.01)) { alert('Nenhuma parcela pode ter valor menor que R$ 0,01.'); return; }
     setLoading(true);
-
-    let index = 0;
-    for (const parcela of parcelasCalculadas) {
-      index++;
-      setLoadingProgress(`Enviando ${index}/${n}...`);
-
-      if (index > 1) {
-        await new Promise(resolve => setTimeout(resolve, 300));
+    try {
+      const { data: existing, error: findError } = await supabase.from('categories').select('id').eq('user_id', user.id).eq('name', categoria.trim()).maybeSingle();
+      if (findError) throw findError;
+      let categoryId = existing?.id as string | undefined;
+      if (!categoryId) {
+        const { data: created, error: categoryError } = await supabase.from('categories').insert({ user_id: user.id, name: categoria.trim() }).select('id').single();
+        if (categoryError) throw categoryError;
+        categoryId = created.id;
       }
-
-      const descricaoFinal = n > 1
-        ? (descricao.trim() ? `${descricao.trim()} (${index}/${n})` : `${categoria} (${index}/${n})`)
-        : descricao;
-
-      const payload = {
-        data_hora: format(parcela.data, 'dd/MM/yyyy HH:mm:ss'),
+      const idCompra = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const rows = parcelasCalculadas.map((parcela, index) => ({
+        id: n > 1 ? `${idCompra}-${index + 1}` : idCompra,
+        user_id: user.id,
+        category_id: categoryId,
+        data_hora: parcela.data.toISOString(),
         movimento: tipo,
-        banco,
-        categoria,
-        responsavel,
-        descricao: descricaoFinal,
-        valor: Number(parcela.valor),
-        confirmado: Boolean(confirmado),
-        parcela_atual: parcela.numero,
-        total_parcelas: n,
-        id_compra: idCompra,
-      };
-
-      try {
-        await enviarParaWebhook(webhookUrl, payload);
-      } catch (err) {
-        console.error(err);
-        alert(`Erro ao enviar a parcela ${index} de ${n}. ${index - 1} já foram salvas. Verifique a planilha.`);
-        setLoading(false);
-        setLoadingProgress(null);
-        return;
-      }
-    }
-
-    if (n > 1) {
-      alert(`${n} parcelas salvas com sucesso!`);
-    } else {
-      alert("Registro salvo com sucesso!");
-    }
-
-    setValor('');
-    setDescricao('');
-    setParcelas(1);
-    setProximaFatura(false);
-    setLoading(false);
-    setLoadingProgress(null);
+        banco: banco || null,
+        responsavel: responsavel || null,
+        descricao: n > 1 ? (descricao.trim() ? `${descricao.trim()} (${index + 1}/${n})` : `${categoria} (${index + 1}/${n})`) : (descricao.trim() || null),
+        valor: Number(parcela.valor), confirmado: Boolean(confirmado),
+      }));
+      const { error } = await supabase.from('transactions').insert(rows);
+      if (error) throw error;
+      alert(n > 1 ? `${n} parcelas salvas com sucesso!` : 'Registro salvo com sucesso!');
+      setValor(''); setDescricao(''); setParcelas(1); setProximaFatura(false);
+    } catch (err) {
+      console.error('Erro ao salvar lançamento no Supabase:', err);
+      alert(err instanceof Error ? `Não foi possível salvar: ${err.message}` : 'Não foi possível salvar o lançamento.');
+    } finally { setLoading(false); setLoadingProgress(null); }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 text-[var(--text-primary)]">
-      <div className="flex justify-end">
-        <button 
-          type="button" 
-          onClick={onOpenIntegracoes} 
-          className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-input)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-        >
-          <LinkIcon size={14}/> Integrações
-        </button>
-      </div>
-      
       <div>
         <label className="block text-[12px] font-medium text-[var(--text-secondary)] mb-1.5">Tipo de Movimentação</label>
         <div className="grid grid-cols-2 gap-3">
