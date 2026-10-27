@@ -6,7 +6,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
-    root: 'minhas-economias-work',
+    root: import.meta.dirname,
     plugins: [
       react(),
       tailwindcss(),
@@ -91,7 +91,7 @@ export default defineConfig(() => {
       },
     },
     build: {
-      outDir: path.resolve(import.meta.dirname, '../dist'),
+      outDir: path.resolve(import.meta.dirname, 'dist'),
       emptyOutDir: true,
       rollupOptions: {
         output: {
