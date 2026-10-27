@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, Link } from 'react-router-dom';
 import { useLayoutEffect, useRef, lazy, Suspense } from 'react';
 import BottomNav from './components/common/BottomNav';
 import { ScreenHeader } from './components/common/ScreenHeader';
-import { ReceiptText, Plus, PieChart, BarChart3 } from 'lucide-react';
+import { ReceiptText, Plus, PieChart, BarChart3, Settings } from 'lucide-react';
 
 import { MonthProvider } from './components/common/MonthContext';
 import { AuthProvider, useAuth } from './components/auth/AuthProvider';
@@ -20,6 +20,7 @@ const Lancamentos = lazy(() => import('./pages/Lancamentos'));
 const Categorias = lazy(() => import('./pages/Categorias'));
 const Analises = lazy(() => import('./pages/Analises'));
 const NovoLancamento = lazy(() => import('./pages/NovoLancamento'));
+const Configuracoes = lazy(() => import('./pages/Configuracoes'));
 
 function PageFallback() {
   return (
@@ -62,6 +63,8 @@ function AppLayout({ onSignOut, userEmail, userName, avatarUrl }: { onSignOut: (
     headerConfig = <ScreenHeader icon={<PieChart />} title="Categorias" subtitle="Para onde seu dinheiro está indo" />;
   } else if (path === '/analises') {
     headerConfig = <ScreenHeader icon={<BarChart3 />} title="Análises" subtitle="Evolução das suas finanças" />;
+  } else if (path === '/configuracoes') {
+    headerConfig = <ScreenHeader icon={<Settings />} title="Configurações" subtitle="Conta, cadastros e dados" />;
   }
 
   return (
@@ -73,11 +76,31 @@ function AppLayout({ onSignOut, userEmail, userName, avatarUrl }: { onSignOut: (
         <div className="shrink-0 z-40 w-full">
           {headerConfig}
           <div className="flex items-center justify-between gap-3 px-4 py-2 bg-[var(--bg-card)] border-b border-[var(--border)]">
-            <div className="flex items-center gap-2 min-w-0">
-              {avatarUrl ? <img src={avatarUrl} alt="" referrerPolicy="no-referrer" className="h-8 w-8 rounded-full object-cover" /> : <div className="h-8 w-8 rounded-full bg-[var(--primary)] text-white flex items-center justify-center text-xs font-bold">{userName.slice(0,1).toUpperCase()}</div>}
-              <div className="min-w-0"><p className="text-xs font-semibold truncate">{userName}</p><p className="text-[10px] text-[var(--text-secondary)] truncate">{userEmail}</p></div>
-            </div>
-            <button onClick={() => void onSignOut()} className="text-xs font-semibold text-[var(--primary)]">Sair</button>
+            <Link
+              to="/configuracoes"
+              className="flex items-center gap-2 min-w-0 text-left hover:opacity-85 transition-opacity cursor-pointer group"
+              title="Abrir configurações"
+            >
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  className="h-8 w-8 rounded-full object-cover group-hover:ring-2 group-hover:ring-[var(--primary)] transition-all"
+                />
+              ) : (
+                <div className="h-8 w-8 rounded-full bg-[var(--primary)] text-white flex items-center justify-center text-xs font-bold group-hover:ring-2 group-hover:ring-[var(--primary)] transition-all">
+                  {userName.slice(0, 1).toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-xs font-semibold truncate group-hover:text-[var(--primary)] transition-colors">
+                  {userName}
+                </p>
+                <p className="text-[10px] text-[var(--text-secondary)] truncate">{userEmail}</p>
+              </div>
+            </Link>
+            <button onClick={() => void onSignOut()} className="text-xs font-semibold text-[var(--primary)] cursor-pointer">Sair</button>
           </div>
         </div>
         <main
@@ -91,6 +114,7 @@ function AppLayout({ onSignOut, userEmail, userName, avatarUrl }: { onSignOut: (
               <Route path="/categorias" element={<Categorias />} />
               <Route path="/analises" element={<Analises />} />
               <Route path="/novo" element={<NovoLancamento />} />
+              <Route path="/configuracoes" element={<Configuracoes />} />
             </Routes>
           </Suspense>
         </main>
