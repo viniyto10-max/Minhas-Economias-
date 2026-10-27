@@ -15,15 +15,14 @@ import LoginScreen from './components/auth/LoginScreen';
 import { supabaseConfigured } from './lib/supabase';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
-import Termos from './pages/Termos';
-import Privacidade from './pages/Privacidade';
-
 const Home = lazy(() => import('./pages/Home'));
 const Lancamentos = lazy(() => import('./pages/Lancamentos'));
 const Categorias = lazy(() => import('./pages/Categorias'));
 const Analises = lazy(() => import('./pages/Analises'));
 const NovoLancamento = lazy(() => import('./pages/NovoLancamento'));
 const Configuracoes = lazy(() => import('./pages/Configuracoes'));
+const Privacidade = lazy(() => import('./pages/Privacidade'));
+const Termos = lazy(() => import('./pages/Termos'));
 
 function PageFallback() {
   return (
