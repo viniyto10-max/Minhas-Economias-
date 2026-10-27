@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 
-const CONTATO = '[SEU_EMAIL_AQUI]';
+const CONTATO = '[viniyto10@gmail.com]';
 const ATUALIZADO_EM = '27/10/2026';
 
 const SECOES: { titulo: string; texto: string }[] = [
