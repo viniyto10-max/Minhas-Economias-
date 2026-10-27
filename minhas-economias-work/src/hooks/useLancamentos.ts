@@ -80,5 +80,24 @@ export function useLancamentos() {
     void recarregar();
   }, [recarregar]);
 
-  return { lancamentos, loading, erro, recarregar, lastUpdated };
+  const excluir = useCallback(async (id: string, tipo: 'unica' | 'futuras') => {
+    if (!user || !supabase) return;
+    
+    if (tipo === 'unica') {
+      const { error } = await supabase.from('transactions').delete().eq('id', id);
+      if (error) throw error;
+    } else {
+      // Implement logic for 'futuras' if needed or just delete if id pattern matches
+      const { error } = await supabase.from('transactions').delete().eq('id', id);
+      if (error) throw error;
+    }
+  }, [user?.id]);
+
+  const atualizar = useCallback(async (id: string, updates: Partial<Transaction>) => {
+    if (!user || !supabase) return;
+    const { error } = await supabase.from('transactions').update(updates).eq('id', id);
+    if (error) throw error;
+  }, [user?.id]);
+
+  return { lancamentos, loading, erro, recarregar, lastUpdated, excluir, atualizar };
 }
