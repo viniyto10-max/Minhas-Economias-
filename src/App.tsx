@@ -13,8 +13,6 @@ import { MonthProvider } from './components/common/MonthContext';
 import { AuthProvider, useAuth } from './components/auth/AuthProvider';
 import LoginScreen from './components/auth/LoginScreen';
 import { supabaseConfigured } from './lib/supabase';
-import Privacidade from "./pages/Privacidade";
-import Termos from "./pages/Termos";
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 const Home = lazy(() => import('./pages/Home'));
@@ -23,6 +21,8 @@ const Categorias = lazy(() => import('./pages/Categorias'));
 const Analises = lazy(() => import('./pages/Analises'));
 const NovoLancamento = lazy(() => import('./pages/NovoLancamento'));
 const Configuracoes = lazy(() => import('./pages/Configuracoes'));
+const Privacidade = lazy(() => import('./pages/Privacidade'));
+const Termos = lazy(() => import('./pages/Termos'));
 
 function PageFallback() {
   return (
@@ -111,9 +111,6 @@ function AppLayout({ onSignOut, userEmail, userName, avatarUrl }: { onSignOut: (
         >
           <Suspense fallback={<PageFallback />}>
             <Routes>
-              
-              <Route path="/privacidade" element={<Privacidade />} />
-              <Route path="/termos" element={<Termos />} />
               <Route path="/" element={<Home />} />
               <Route path="/lancamentos" element={<Lancamentos />} />
               <Route path="/categorias" element={<Categorias />} />
@@ -130,5 +127,22 @@ function AppLayout({ onSignOut, userEmail, userName, avatarUrl }: { onSignOut: (
 }
 
 export default function App() {
-  return <ErrorBoundary><AuthProvider><BrowserRouter><AuthenticatedApp /></BrowserRouter></AuthProvider></ErrorBoundary>;
+  return (
+    <ErrorBoundary>
+      <AuthProvider>
+        <BrowserRouter>
+          <Suspense fallback={<PageFallback />}>
+            <Routes>
+              {/* Rotas públicas (acessíveis sem login) */}
+              <Route path="/privacidade" element={<Privacidade />} />
+              <Route path="/termos" element={<Termos />} />
+
+              {/* Rotas autenticadas */}
+              <Route path="/*" element={<AuthenticatedApp />} />
+            </Routes>
+          </Suspense>
+        </BrowserRouter>
+      </AuthProvider>
+    </ErrorBoundary>
+  );
 }

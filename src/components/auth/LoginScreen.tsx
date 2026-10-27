@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Wallet, LogIn, ShieldCheck, AlertCircle } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 import { supabaseConfigured, isInvalidSupabaseUrl } from '../../lib/supabase';
@@ -66,6 +67,16 @@ export default function LoginScreen() {
         <p className="mt-5 flex items-center justify-center gap-1.5 text-xs text-[var(--text-secondary)]">
           <ShieldCheck size={14} /> Seus dados são isolados por usuário.
         </p>
+
+        <div className="mt-6 pt-4 border-t border-[var(--border)] flex items-center justify-center gap-3 text-xs text-[var(--text-secondary)]">
+          <Link to="/privacidade" className="hover:text-[var(--primary)] underline transition-colors">
+            Política de Privacidade
+          </Link>
+          <span>•</span>
+          <Link to="/termos" className="hover:text-[var(--primary)] underline transition-colors">
+            Termos de Uso
+          </Link>
+        </div>
       </section>
     </main>
   );
