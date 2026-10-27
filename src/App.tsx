@@ -13,6 +13,8 @@ import { MonthProvider } from './components/common/MonthContext';
 import { AuthProvider, useAuth } from './components/auth/AuthProvider';
 import LoginScreen from './components/auth/LoginScreen';
 import { supabaseConfigured } from './lib/supabase';
+import Privacidade from "./pages/Privacidade";
+import Termos from "./pages/Termos";
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 const Home = lazy(() => import('./pages/Home'));
@@ -109,6 +111,9 @@ function AppLayout({ onSignOut, userEmail, userName, avatarUrl }: { onSignOut: (
         >
           <Suspense fallback={<PageFallback />}>
             <Routes>
+              
+              <Route path="/privacidade" element={<Privacidade />} />
+              <Route path="/termos" element={<Termos />} />
               <Route path="/" element={<Home />} />
               <Route path="/lancamentos" element={<Lancamentos />} />
               <Route path="/categorias" element={<Categorias />} />

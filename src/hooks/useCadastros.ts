@@ -12,6 +12,15 @@ export function useCadastros() {
   const [erro, setErro] = useState<string | null>(null);
   const inFlightRef = useRef(false);
 
+  // Zera dados ao trocar de usuário
+  useEffect(() => {
+    setCategorias([]);
+    setResponsaveis([]);
+    setFormasPagamento([]);
+    setLoading(true);
+    setErro(null);
+  }, [user?.id]);
+
   const recarregar = useCallback(async () => {
     if (!user || !supabase) {
       setCategorias([]);
@@ -24,7 +33,6 @@ export function useCadastros() {
     inFlightRef.current = true;
     setLoading(true);
     setErro(null);
-
     try {
       const [resCat, resResp, resPag] = await Promise.all([
         supabase
@@ -43,15 +51,15 @@ export function useCadastros() {
           .eq('user_id', user.id)
           .order('nome', { ascending: true }),
       ]);
-
-      if (resCat.error) throw resCat.error;
-      if (resResp.error) throw resResp.error;
-      if (resPag.error) throw resPag.error;
-
+      if (resCat.error) throw new Error('Erro ao carregar categorias.');
+      if (resResp.error) throw new Error('Erro ao carregar responsáveis.');
+      if (resPag.error) throw new Error('Erro ao carregar formas de pagamento.');
+      
       setCategorias(resCat.data ?? []);
       setResponsaveis(resResp.data ?? []);
       setFormasPagamento(resPag.data ?? []);
-    } catch (e) {
+    } catch (e: any) {
+      console.error('Erro ao carregar cadastros:', e);
       setErro(e instanceof Error ? e.message : 'Não foi possível carregar os cadastros.');
     } finally {
       inFlightRef.current = false;
@@ -71,11 +79,11 @@ export function useCadastros() {
       .insert({ user_id: user.id, name: name.trim() })
       .select('id, name')
       .single();
-    if (error) throw error;
+    if (error) throw new Error('Erro ao criar categoria.');
     await recarregar();
     return data;
   };
-
+  
   const atualizarCategoria = async (id: string, name: string): Promise<void> => {
     if (!user || !supabase) throw new Error('Usuário não autenticado.');
     const { error } = await supabase
@@ -83,10 +91,10 @@ export function useCadastros() {
       .update({ name: name.trim() })
       .eq('id', id)
       .eq('user_id', user.id);
-    if (error) throw error;
+    if (error) throw new Error('Erro ao atualizar categoria.');
     await recarregar();
   };
-
+  
   const excluirCategoria = async (id: string): Promise<void> => {
     if (!user || !supabase) throw new Error('Usuário não autenticado.');
     const { error } = await supabase
@@ -94,7 +102,7 @@ export function useCadastros() {
       .delete()
       .eq('id', id)
       .eq('user_id', user.id);
-    if (error) throw error;
+    if (error) throw new Error('Erro ao excluir categoria.');
     await recarregar();
   };
 
@@ -110,7 +118,7 @@ export function useCadastros() {
       })
       .select('id, nome, foto_url')
       .single();
-    if (error) throw error;
+    if (error) throw new Error('Erro ao criar responsável.');
     await recarregar();
     return data;
   };
@@ -123,13 +131,12 @@ export function useCadastros() {
     const payload: { nome?: string; foto_url?: string | null } = {};
     if (dados.nome !== undefined) payload.nome = dados.nome.trim();
     if (dados.foto_url !== undefined) payload.foto_url = dados.foto_url?.trim() || null;
-
     const { error } = await supabase
       .from('responsaveis')
       .update(payload)
       .eq('id', id)
       .eq('user_id', user.id);
-    if (error) throw error;
+    if (error) throw new Error('Erro ao atualizar responsável.');
     await recarregar();
   };
 
@@ -140,7 +147,7 @@ export function useCadastros() {
       .delete()
       .eq('id', id)
       .eq('user_id', user.id);
-    if (error) throw error;
+    if (error) throw new Error('Erro ao excluir responsável.');
     await recarregar();
   };
 
@@ -161,7 +168,7 @@ export function useCadastros() {
       })
       .select('id, nome, tipo, cor')
       .single();
-    if (error) throw error;
+    if (error) throw new Error('Erro ao criar forma de pagamento.');
     await recarregar();
     return data;
   };
@@ -175,13 +182,12 @@ export function useCadastros() {
     if (dados.nome !== undefined) payload.nome = dados.nome.trim();
     if (dados.tipo !== undefined) payload.tipo = dados.tipo;
     if (dados.cor !== undefined) payload.cor = dados.cor.trim();
-
     const { error } = await supabase
       .from('payment_methods')
       .update(payload)
       .eq('id', id)
       .eq('user_id', user.id);
-    if (error) throw error;
+    if (error) throw new Error('Erro ao atualizar forma de pagamento.');
     await recarregar();
   };
 
@@ -192,7 +198,18 @@ export function useCadastros() {
       .delete()
       .eq('id', id)
       .eq('user_id', user.id);
-    if (error) throw error;
+    if (error) throw new Error('Erro ao excluir forma de pagamento.');
+    await recarregar();
+  };
+
+  // Profile management
+  const atualizarProfile = async (id: string, onboarded_at: string | null): Promise<void> => {
+    if (!user || !supabase) throw new Error('Usuário não autenticado.');
+    const { error } = await supabase
+      .from('profiles')
+      .update({ onboarded_at })
+      .eq('id', id);
+    if (error) throw new Error('Erro ao atualizar perfil.');
     await recarregar();
   };
 
@@ -212,5 +229,6 @@ export function useCadastros() {
     criarFormaPagamento,
     atualizarFormaPagamento,
     excluirFormaPagamento,
+    atualizarProfile,
   };
 }

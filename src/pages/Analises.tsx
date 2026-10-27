@@ -622,7 +622,7 @@ export default function Analises() {
         {/* Loading / Erro */}
         {loading && (
           <div className="p-4 text-center text-xs text-[var(--text-secondary)] animate-pulse">
-            Carregando movimentações da planilha...
+            Carregando lançamentos...
           </div>
         )}
         {erro && (

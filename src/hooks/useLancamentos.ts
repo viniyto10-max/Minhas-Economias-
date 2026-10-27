@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Transaction, TipoFormaPagamento } from '../types';
-import { isValid } from 'date-fns';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../components/auth/AuthProvider';
+import { Transaction, TipoFormaPagamento } from '../types';
+import { isValid } from 'date-fns';
 
 export function useLancamentos() {
   const { user } = useAuth();
@@ -10,16 +10,22 @@ export function useLancamentos() {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const inFlightRef = useRef(false);
+  
+  // Zera dados ao trocar de usuário
+  useEffect(() => {
+    setLancamentos([]);
+    setLoading(true);
+    setErro(null);
+    setLastUpdated(null);
+  }, [user?.id]);
 
-  const recarregar = useCallback(async (_isBackground = false) => {
+  const recarregar = useCallback(async () => {
     if (!user || !supabase) {
       setLancamentos([]);
       setLoading(false);
       return;
     }
-    if (inFlightRef.current) return;
-    inFlightRef.current = true;
+
     setLoading(true);
     setErro(null);
 
@@ -32,21 +38,24 @@ export function useLancamentos() {
         .eq('user_id', user.id)
         .order('data_hora', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        // PostgrestError pode não ter status diretamente
+        const err = error as any;
+        if (err.code === 'PGRST301' || err.status === 401 || err.status === 403) {
+          throw new Error('Sessão expirada. Entre novamente.');
+        }
+        throw new Error('Não foi possível carregar os lançamentos.');
+      }
 
       const rows: Transaction[] = (data ?? [])
         .map((row: any) => {
           const bancoNome = row.payment_methods?.nome ?? row.banco ?? '';
           const responsavelNome = row.responsaveis?.nome ?? row.responsavel ?? '';
-
           let bancoTipo: TipoFormaPagamento | null = row.payment_methods?.tipo ?? null;
           if (!bancoTipo) {
             const textoBanco = (row.banco ?? '').toLowerCase();
             bancoTipo = textoBanco.includes('cart') ? 'cartao' : 'conta';
           }
-
-          const bancoCor = row.payment_methods?.cor ?? null;
-
           return {
             id: String(row.id),
             data_hora: new Date(row.data_hora),
@@ -61,17 +70,17 @@ export function useLancamentos() {
             responsavel_id: row.responsavel_id ?? null,
             payment_method_id: row.payment_method_id ?? null,
             banco_tipo: bancoTipo,
-            banco_cor: bancoCor,
+            banco_cor: row.payment_methods?.cor ?? null,
           };
         })
         .filter((row) => isValid(row.data_hora) && Number.isFinite(row.valor));
 
       setLancamentos(rows);
       setLastUpdated(new Date());
-    } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível carregar seus lançamentos.');
+    } catch (e: any) {
+      console.error('Erro ao carregar lançamentos:', e);
+      setErro(e instanceof Error ? e.message : 'Erro ao carregar lançamentos.');
     } finally {
-      inFlightRef.current = false;
       setLoading(false);
     }
   }, [user?.id]);
@@ -82,21 +91,14 @@ export function useLancamentos() {
 
   const excluir = useCallback(async (id: string, tipo: 'unica' | 'futuras') => {
     if (!user || !supabase) return;
-    
-    if (tipo === 'unica') {
-      const { error } = await supabase.from('transactions').delete().eq('id', id);
-      if (error) throw error;
-    } else {
-      // Implement logic for 'futuras' if needed or just delete if id pattern matches
-      const { error } = await supabase.from('transactions').delete().eq('id', id);
-      if (error) throw error;
-    }
+    const { error } = await supabase.from('transactions').delete().eq('id', id);
+    if (error) throw new Error('Erro ao excluir lançamento.');
   }, [user?.id]);
 
   const atualizar = useCallback(async (id: string, updates: Partial<Transaction>) => {
     if (!user || !supabase) return;
     const { error } = await supabase.from('transactions').update(updates).eq('id', id);
-    if (error) throw error;
+    if (error) throw new Error('Erro ao atualizar lançamento.');
   }, [user?.id]);
 
   return { lancamentos, loading, erro, recarregar, lastUpdated, excluir, atualizar };

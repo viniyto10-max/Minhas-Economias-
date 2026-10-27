@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import React, { useState } from 'react';
 import { 
   User, 
@@ -13,8 +14,14 @@ import {
   Check, 
   X, 
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Database,
+  Download,
+  ShieldAlert,
+  AlertTriangle
 } from 'lucide-react';
+import { format } from 'date-fns';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../components/auth/AuthProvider';
 import { useCadastros } from '../hooks/useCadastros';
 import { useNotification } from '../hooks/useNotification';
@@ -58,6 +65,7 @@ export default function Configuracoes() {
     criarFormaPagamento,
     atualizarFormaPagamento,
     excluirFormaPagamento,
+    atualizarProfile,
   } = useCadastros();
 
   const { permission, enabled: notifEnabled, toggleNotifications } = useNotification();
@@ -65,6 +73,12 @@ export default function Configuracoes() {
   // Estados de feedback
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Estados de Seus Dados (Exportação CSV e Exclusão de Conta)
+  const [isExporting, setIsExporting] = useState(false);
+  const [modalExcluirConta, setModalExcluirConta] = useState(false);
+  const [textoConfirmacaoConta, setTextoConfirmacaoConta] = useState('');
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -105,6 +119,165 @@ export default function Configuracoes() {
     id: string;
     nome: string;
   } | null>(null);
+
+  // Handlers - Exportar CSV
+  const handleExportarCSV = async () => {
+    if (!user || !supabase) return;
+    setIsExporting(true);
+    try {
+      let allRows: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
+
+        const { data, error } = await supabase
+          .from('transactions')
+          .select(
+            'data_hora, movimento, valor, descricao, confirmado, categories(name), responsaveis(nome), payment_methods(nome)'
+          )
+          .eq('user_id', user.id)
+          .order('data_hora', { ascending: false })
+          .range(from, to);
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allRows = allRows.concat(data);
+          if (data.length < pageSize) {
+            hasMore = false;
+          } else {
+            page++;
+          }
+        } else {
+          hasMore = false;
+        }
+      }
+
+      if (allRows.length === 0) {
+        showToast('Nenhum lançamento encontrado para exportar.', 'error');
+        setIsExporting(false);
+        return;
+      }
+
+      const sanitizeCSV = (text: string | null | undefined): string => {
+        if (!text) return '';
+        let str = String(text).trim();
+        if (/^[=+\-@]/.test(str)) {
+          str = "'" + str;
+        }
+        if (str.includes(';') || str.includes('"') || str.includes('\n')) {
+          str = '"' + str.replace(/"/g, '""') + '"';
+        }
+        return str;
+      };
+
+      const headers = [
+        'data',
+        'hora',
+        'tipo',
+        'valor',
+        'categoria',
+        'forma de pagamento',
+        'responsável',
+        'descrição',
+        'confirmado',
+      ].join(';');
+
+      const csvLines = allRows.map((row) => {
+        const dt = new Date(row.data_hora);
+        const dataStr = !isNaN(dt.getTime()) ? format(dt, 'dd/MM/yyyy') : '';
+        const horaStr = !isNaN(dt.getTime()) ? format(dt, 'HH:mm') : '';
+        const tipoStr = sanitizeCSV(row.movimento);
+        const valNum = Number(row.valor) || 0;
+        const valStr = valNum.toFixed(2).replace('.', ',');
+        const catStr = sanitizeCSV(row.categories?.name || '');
+        const pagStr = sanitizeCSV(row.payment_methods?.nome || '');
+        const respStr = sanitizeCSV(row.responsaveis?.nome || '');
+        const descStr = sanitizeCSV(row.descricao || '');
+        const confStr = row.confirmado ? 'Sim' : 'Não';
+
+        return [
+          dataStr,
+          horaStr,
+          tipoStr,
+          valStr,
+          catStr,
+          pagStr,
+          respStr,
+          descStr,
+          confStr,
+        ].join(';');
+      });
+
+      const bom = '\uFEFF';
+      const csvContent = bom + [headers, ...csvLines].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const today = format(new Date(), 'yyyy-MM-dd');
+      link.href = url;
+      link.setAttribute('download', `minhas-economias-${today}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      showToast('Dados exportados com sucesso!');
+    } catch (err) {
+      console.error('Erro ao exportar CSV:', err);
+      showToast('Não foi possível exportar os dados.', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Handlers - Excluir Conta
+  const handleExcluirConta = async () => {
+    if (textoConfirmacaoConta.trim() !== 'EXCLUIR') return;
+    setIsDeletingAccount(true);
+
+    try {
+      if (!supabase) throw new Error('Supabase indisponível.');
+
+      const { error } = await supabase.functions.invoke('delete-account');
+      if (error) throw error;
+
+      // Preserva tema no localStorage se existir
+      const themeKey = 'minhas-economias-theme';
+      const savedTheme = localStorage.getItem(themeKey);
+
+      localStorage.clear();
+      if (savedTheme) {
+        localStorage.setItem(themeKey, savedTheme);
+      }
+
+      if ('caches' in window) {
+        try {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+        } catch (e) {
+          console.error('Erro ao limpar cache:', e);
+        }
+      }
+
+      await signOut();
+      alert('Conta excluída');
+      window.location.href = '/';
+    } catch (err) {
+      console.error('Erro ao excluir conta:', err);
+      showToast(
+        'Ocorreu um erro ao excluir a conta. Tente novamente ou entre em contato.',
+        'error'
+      );
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
 
   // Handlers - Responsável
   const handleSalvarResponsavel = async (e: React.FormEvent) => {
@@ -611,6 +784,23 @@ export default function Configuracoes() {
           </div>
         </div>
 
+        {/* Refazer introdução */}
+        <div className="flex items-center justify-between py-2 border-b border-[var(--border)]">
+          <div>
+            <p className="text-xs font-semibold text-[var(--text-primary)]">Refazer introdução</p>
+            <p className="text-[11px] text-[var(--text-secondary)]">Reiniciar o fluxo de onboarding do primeiro acesso</p>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              atualizarProfile(user?.id ?? '', null).then(() => window.location.reload())
+            }
+            className="min-h-[44px] px-3 py-1.5 rounded-xl bg-[var(--bg-input)] text-[var(--text-primary)] border border-[var(--border)] hover:border-[var(--primary)] transition-colors text-xs font-semibold cursor-pointer"
+          >
+            Zerar onboarding
+          </button>
+        </div>
+
         {/* Notificações diárias */}
         <div className="flex items-center justify-between py-2 border-b border-[var(--border)]">
           <div className="pr-3">
@@ -648,6 +838,58 @@ export default function Configuracoes() {
             Instale o Minhas Economias para acesso rápido e funcionamento otimizado.
           </p>
           <PWAInstallButton />
+        </div>
+      </section>
+
+      {/* SEÇÃO F: SEUS DADOS */}
+      <section className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-5 shadow-sm space-y-4">
+        <div className="flex items-center gap-2 border-b border-[var(--border)] pb-3">
+          <Database size={18} className="text-[var(--primary)]" />
+          <h2 className="font-bold text-sm text-[var(--text-primary)]">Seus Dados</h2>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between py-2 border-b border-[var(--border)] flex-wrap gap-3">
+            <div>
+              <p className="text-xs font-semibold text-[var(--text-primary)]">Exportação de dados</p>
+              <p className="text-[11px] text-[var(--text-secondary)]">
+                Baixe uma cópia completa de todos os seus lançamentos em formato CSV.
+              </p>
+            </div>
+            <button
+              type="button"
+              disabled={isExporting}
+              onClick={handleExportarCSV}
+              className="min-h-[44px] px-4 py-2 rounded-xl bg-[var(--bg-input)] border border-[var(--border)] text-[var(--text-primary)] hover:border-[var(--primary)] transition-all text-xs font-semibold flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {isExporting ? (
+                <Loader2 size={16} className="animate-spin text-[var(--primary)]" />
+              ) : (
+                <Download size={16} className="text-[var(--primary)]" />
+              )}
+              <span>Exportar meus dados (CSV)</span>
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between py-2 flex-wrap gap-3">
+            <div>
+              <p className="text-xs font-semibold text-red-500">Excluir conta definitivamente</p>
+              <p className="text-[11px] text-[var(--text-secondary)]">
+                Apaga permanentemente sua conta e todos os seus lançamentos e cadastros.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setModalExcluirConta(true);
+                setTextoConfirmacaoConta('');
+              }}
+              className="min-h-[44px] px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 hover:bg-red-500/20 active:scale-95 transition-all text-xs font-bold flex items-center gap-2 cursor-pointer"
+            >
+              <Trash2 size={16} />
+              <span>Excluir minha conta</span>
+            </button>
+          </div>
         </div>
       </section>
 
@@ -935,7 +1177,7 @@ export default function Configuracoes() {
         </div>
       )}
 
-      {/* MODAL: CONFIRMAÇÃO DE EXCLUSÃO */}
+      {/* MODAL: CONFIRMAÇÃO DE EXCLUSÃO DE ITEM */}
       {modalExclusao && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-in fade-in duration-200">
           <div className="w-full max-w-sm rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6 shadow-2xl space-y-4">
@@ -976,6 +1218,66 @@ export default function Configuracoes() {
           </div>
         </div>
       )}
+
+      {/* MODAL: EXCLUIR CONTA */}
+      {modalExcluirConta && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-sm rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-red-500">
+              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
+                <ShieldAlert size={20} />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-[var(--text-primary)]">Excluir Conta</h3>
+                <p className="text-[10px] text-red-500 font-semibold">Ação irreversível</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+              Esta ação apagará permanentemente todos os seus lançamentos, categorias, responsáveis e preferências. <strong>Sua conta será completamente removida e esta ação não poderá ser desfeita.</strong>
+            </p>
+
+            <div className="space-y-1.5 pt-1">
+              <label className="block text-[11px] font-semibold text-[var(--text-primary)]">
+                Digite <span className="font-mono text-red-500 font-bold">EXCLUIR</span> para confirmar:
+              </label>
+              <input
+                type="text"
+                value={textoConfirmacaoConta}
+                onChange={(e) => setTextoConfirmacaoConta(e.target.value)}
+                placeholder="Digite EXCLUIR"
+                className="w-full min-h-[44px] px-3.5 rounded-xl border border-[var(--border)] bg-[var(--bg-input)] text-xs text-[var(--text-primary)] font-mono uppercase focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--border)]">
+              <button
+                type="button"
+                disabled={isDeletingAccount}
+                onClick={() => setModalExcluirConta(false)}
+                className="min-h-[44px] px-4 rounded-xl border border-[var(--border)] text-xs font-semibold text-[var(--text-secondary)] hover:bg-[var(--bg-app)] transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingAccount || textoConfirmacaoConta.trim() !== 'EXCLUIR'}
+                onClick={handleExcluirConta}
+                className="min-h-[44px] px-4 rounded-xl bg-red-500 hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold transition-all flex items-center gap-2 cursor-pointer"
+              >
+                {isDeletingAccount && <Loader2 size={14} className="animate-spin" />}
+                <span>Excluir definitivamente</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Links legais */}
+      <div className="flex justify-center gap-4 py-4 text-xs">
+        <Link to="/termos" className="text-[var(--text-secondary)] hover:text-[var(--primary)] underline">Termos de Uso</Link>
+        <Link to="/privacidade" className="text-[var(--text-secondary)] hover:text-[var(--primary)] underline">Política de Privacidade</Link>
+      </div>
     </div>
   );
 }
