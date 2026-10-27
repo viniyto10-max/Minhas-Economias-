@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 
-const CONTATO = '[viniyto10@gmail.com]';
+const CONTATO = 'viniyto10@gmail.com';
 const ATUALIZADO_EM = '27/10/2026';
 
 const SECOES: { titulo: string; texto: string }[] = [
@@ -50,7 +50,7 @@ export default function Termos() {
         <button
           type="button"
           onClick={voltar}
-          className="flex min-h-[44px] items-center gap-2 text-sm font-semibold text-[var(--primary)]"
+          className="flex min-h-[44px] items-center gap-2 text-sm font-semibold text-[var(--primary)] cursor-pointer"
         >
           <ArrowLeft size={18} /> Voltar
         </button>
