@@ -41,7 +41,7 @@ import {
 import { useLancamentos } from '../hooks/useLancamentos';
 import { formatCurrency } from '../lib/utils';
 import ResponsavelAvatar from '../components/common/ResponsavelAvatar';
-import { FOTOS_RESPONSAVEIS, CARTOES, isCartao, matchCartao, getCartaoVisual } from '../lib/constants';
+import { useCadastros } from '../hooks/useCadastros';
 
 type PeriodoTipo = '3_meses' | '6_meses' | '12_meses' | 'ano_atual';
 
@@ -60,6 +60,7 @@ const PERIODOS: PeriodoOption[] = [
 export default function Analises() {
   const navigate = useNavigate();
   const { lancamentos, loading, erro } = useLancamentos();
+  const { responsaveis, formasPagamento } = useCadastros();
 
   // 1. Seletor de período em pills ("6 meses" é o padrão)
   const [periodo, setPeriodo] = useState<PeriodoTipo>('6_meses');
@@ -214,37 +215,59 @@ export default function Analises() {
   }, [monthsList, currentLancamentos, now]);
 
   // ==========================================
-  // 1. COMPARATIVO POR RESPONSÁVEL (Ahyslla x Marcos)
+  // 1. COMPARATIVO POR RESPONSÁVEL (Dinâmico)
   // ==========================================
-  const responsaveisComparativo = useMemo(() => {
-    const normalize = (str: string) => str ? str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim() : '';
+  const RESP_COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#64748B'];
 
-    const getStats = (nameQuery: string, fullName: string) => {
-      const q = normalize(nameQuery);
-      const items = currentLancamentos.filter(t => normalize(t.responsavel).includes(q));
-      const recebido = items.filter(t => t.movimento === 'Entrada').reduce((acc, t) => acc + (t.valor || 0), 0);
-      const gastou = items.filter(t => t.movimento === 'Saída').reduce((acc, t) => acc + (t.valor || 0), 0);
+  const responsaveisComparativo = useMemo(() => {
+    const normalize = (str: string) =>
+      str ? str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() : '';
+
+    const list = responsaveis.map((resp, idx) => {
+      const items = currentLancamentos.filter((t) => {
+        if (t.responsavel_id && resp.id) {
+          return t.responsavel_id === resp.id;
+        }
+        return normalize(t.responsavel) === normalize(resp.nome);
+      });
+      const recebido = items
+        .filter((t) => t.movimento === 'Entrada')
+        .reduce((acc, t) => acc + (t.valor || 0), 0);
+      const gastou = items
+        .filter((t) => t.movimento === 'Saída')
+        .reduce((acc, t) => acc + (t.valor || 0), 0);
+      const saldo = recebido - gastou;
+      const temMovimento = recebido > 0 || gastou > 0;
       return {
-        name: fullName,
-        shortName: nameQuery,
+        id: resp.id,
+        name: resp.nome,
+        shortName: resp.nome.split(' ')[0] || resp.nome,
         recebido,
         gastou,
-        saldo: recebido - gastou,
-        fotoUrl: FOTOS_RESPONSAVEIS[fullName]
+        saldo,
+        fotoUrl: resp.foto_url,
+        temMovimento,
+        color: RESP_COLORS[idx % RESP_COLORS.length],
       };
+    });
+
+    const ativosComMovimento = list.filter((r) => r.temMovimento);
+    const totalGastosTodos = list.reduce((acc, r) => acc + r.gastou, 0);
+
+    const comPct = list.map((r) => ({
+      ...r,
+      gastoPct: totalGastosTodos > 0 ? (r.gastou / totalGastosTodos) * 100 : 0,
+    }));
+
+    // Esconde o bloco quando menos de 2 responsáveis tiverem movimento
+    const mostrarBloco = ativosComMovimento.length >= 2;
+
+    return {
+      responsaveisList: comPct,
+      totalGastosTodos,
+      mostrarBloco,
     };
-
-    const ahyslla = getStats('Ahyslla', 'Ahyslla Vascaina');
-    const marcos = getStats('Marcos', 'Marcos Andrade');
-    const totalGastosJuntos = ahyslla.gastou + marcos.gastou;
-
-    const ahysllaPct = totalGastosJuntos > 0 ? (ahyslla.gastou / totalGastosJuntos) * 100 : 50;
-    const marcosPct = totalGastosJuntos > 0 ? (marcos.gastou / totalGastosJuntos) * 100 : 50;
-
-    const temDados = (ahyslla.recebido > 0 || ahyslla.gastou > 0 || marcos.recebido > 0 || marcos.gastou > 0);
-
-    return { ahyslla, marcos, totalGastosJuntos, ahysllaPct, marcosPct, temDados };
-  }, [currentLancamentos]);
+  }, [responsaveis, currentLancamentos]);
 
   // ==========================================
   // 2. EVOLUÇÃO POR CATEGORIA
@@ -304,27 +327,21 @@ export default function Analises() {
   // ==========================================
   // 3. CARTÕES DE CRÉDITO DINÂMICOS
   // ==========================================
-  const cartoesList = useMemo(() => {
-    const list = [...CARTOES];
-    lancamentos.forEach((t) => {
-      if (t.banco && isCartao(t.banco)) {
-        const matched = matchCartao(t.banco, list);
-        if (matched && !list.includes(matched)) {
-          list.push(matched);
-        } else if (!matched) {
-          const nomeFormatado = t.banco.trim();
-          if (!list.includes(nomeFormatado)) list.push(nomeFormatado);
-        }
-      }
-    });
-    return list;
-  }, [lancamentos]);
+  const cartoesCadastrados = useMemo(() => {
+    return formasPagamento.filter((fp) => fp.tipo === 'cartao');
+  }, [formasPagamento]);
 
   const cartoesData = useMemo(() => {
-    // Totais acumulados por cartão no período selecionado
+    if (cartoesCadastrados.length === 0) {
+      return { chartData: [], cartoesInfo: [] };
+    }
+
+    const normalize = (str: string) =>
+      str ? str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() : '';
+
     const totaisPorCartao: Record<string, number> = {};
-    cartoesList.forEach(c => {
-      totaisPorCartao[c] = 0;
+    cartoesCadastrados.forEach((c) => {
+      totaisPorCartao[c.id] = 0;
     });
 
     const chartData = monthsList.map((monthDate) => {
@@ -337,40 +354,42 @@ export default function Analises() {
       });
 
       const row: Record<string, any> = {
-        label: format(monthDate, 'MMM', { locale: ptBR }).replace(/^\w/, c => c.toUpperCase()),
-        fullLabel: format(monthDate, "MMMM 'de' yyyy", { locale: ptBR })
+        label: format(monthDate, 'MMM', { locale: ptBR }).replace(/^\w/, (c) => c.toUpperCase()),
+        fullLabel: format(monthDate, "MMMM 'de' yyyy", { locale: ptBR }),
       };
 
-      cartoesList.forEach((cartao, idx) => {
+      cartoesCadastrados.forEach((cartao, idx) => {
         const totalMes = itemsInMonth
-          .filter(t => matchCartao(t.banco || '', cartoesList) === cartao)
+          .filter((t) => {
+            if (t.payment_method_id && cartao.id) {
+              return t.payment_method_id === cartao.id;
+            }
+            return normalize(t.banco) === normalize(cartao.nome);
+          })
           .reduce((acc, t) => acc + (t.valor || 0), 0);
 
         const dataKey = `c${idx}`;
         row[dataKey] = totalMes;
-        totaisPorCartao[cartao] += totalMes;
+        totaisPorCartao[cartao.id] += totalMes;
       });
 
       return row;
     });
 
-    const cartoesInfo = cartoesList.map((cartao, idx) => {
-      const visual = getCartaoVisual(cartao);
-      return {
-        key: cartao,
-        dataKey: `c${idx}`,
-        name: cartao,
-        shortName: visual.shortName,
-        color: visual.color,
-        totalPeriodo: totaisPorCartao[cartao] || 0
-      };
-    });
+    const cartoesInfo = cartoesCadastrados.map((cartao, idx) => ({
+      key: cartao.id,
+      dataKey: `c${idx}`,
+      name: cartao.nome,
+      shortName: cartao.nome.length > 12 ? cartao.nome.slice(0, 11) + '…' : cartao.nome,
+      color: cartao.cor,
+      totalPeriodo: totaisPorCartao[cartao.id] || 0,
+    }));
 
     return {
       chartData,
-      cartoesInfo
+      cartoesInfo,
     };
-  }, [monthsList, currentLancamentos, cartoesList]);
+  }, [monthsList, currentLancamentos, cartoesCadastrados]);
 
   const cartoesYAxisInfo = useMemo(() => {
     const isStacked = mesesCount > 6;
@@ -909,8 +928,8 @@ export default function Analises() {
             {/* ETAPA 2: NOVOS BLOCOS REQUISITADOS                       */}
             {/* ======================================================== */}
 
-            {/* 1. COMPARATIVO POR RESPONSÁVEL: Ahyslla x Marcos */}
-            {responsaveisComparativo.temDados && (
+            {/* 1. COMPARATIVO POR RESPONSÁVEL: Versão Dinâmica */}
+            {responsaveisComparativo.mostrarBloco && (
               <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-4 shadow-[var(--shadow)] space-y-4">
                 <div className="flex justify-between items-center">
                   <h3 className="font-bold text-sm text-[var(--text-primary)]">Comparativo por Responsável</h3>
@@ -918,85 +937,64 @@ export default function Analises() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  {/* Ahyslla */}
-                  <div className="bg-[var(--bg-elevated)] border border-[var(--border)] rounded-xl p-3 flex flex-col items-center text-center space-y-2">
-                    <ResponsavelAvatar 
-                      name={responsaveisComparativo.ahyslla.name} 
-                      fotoUrl={responsaveisComparativo.ahyslla.fotoUrl} 
-                      size={48} 
-                    />
-                    <div className="w-full">
-                      <span className="font-bold text-xs text-[var(--text-primary)] block truncate">
-                        {responsaveisComparativo.ahyslla.shortName}
-                      </span>
-                      <div className="text-[11px] text-[var(--text-secondary)] mt-1 space-y-0.5">
-                        <div className="flex justify-between">
-                          <span>Recebeu:</span>
-                          <span className="font-bold text-[var(--primary)]">+{formatCurrency(responsaveisComparativo.ahyslla.recebido)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Gastou:</span>
-                          <span className="font-bold text-[var(--danger)]">-{formatCurrency(responsaveisComparativo.ahyslla.gastou)}</span>
-                        </div>
-                        <div className="flex justify-between pt-1 border-t border-[var(--border)] font-bold">
-                          <span>Saldo:</span>
-                          <span className={responsaveisComparativo.ahyslla.saldo >= 0 ? 'text-[var(--primary)]' : 'text-[var(--danger)]'}>
-                            {formatCurrency(responsaveisComparativo.ahyslla.saldo)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Marcos */}
-                  <div className="bg-[var(--bg-elevated)] border border-[var(--border)] rounded-xl p-3 flex flex-col items-center text-center space-y-2">
-                    <ResponsavelAvatar 
-                      name={responsaveisComparativo.marcos.name} 
-                      fotoUrl={responsaveisComparativo.marcos.fotoUrl} 
-                      size={48} 
-                    />
-                    <div className="w-full">
-                      <span className="font-bold text-xs text-[var(--text-primary)] block truncate">
-                        {responsaveisComparativo.marcos.shortName}
-                      </span>
-                      <div className="text-[11px] text-[var(--text-secondary)] mt-1 space-y-0.5">
-                        <div className="flex justify-between">
-                          <span>Recebeu:</span>
-                          <span className="font-bold text-[var(--primary)]">+{formatCurrency(responsaveisComparativo.marcos.recebido)}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Gastou:</span>
-                          <span className="font-bold text-[var(--danger)]">-{formatCurrency(responsaveisComparativo.marcos.gastou)}</span>
-                        </div>
-                        <div className="flex justify-between pt-1 border-t border-[var(--border)] font-bold">
-                          <span>Saldo:</span>
-                          <span className={responsaveisComparativo.marcos.saldo >= 0 ? 'text-[var(--primary)]' : 'text-[var(--danger)]'}>
-                            {formatCurrency(responsaveisComparativo.marcos.saldo)}
-                          </span>
+                  {responsaveisComparativo.responsaveisList.map((resp) => (
+                    <div
+                      key={resp.id}
+                      className="bg-[var(--bg-elevated)] border border-[var(--border)] rounded-xl p-3 flex flex-col items-center text-center space-y-2"
+                    >
+                      <ResponsavelAvatar 
+                        name={resp.name} 
+                        fotoUrl={resp.fotoUrl ?? undefined} 
+                        size={48} 
+                      />
+                      <div className="w-full">
+                        <span className="font-bold text-xs text-[var(--text-primary)] block truncate">
+                          {resp.shortName}
+                        </span>
+                        <div className="text-[11px] text-[var(--text-secondary)] mt-1 space-y-0.5">
+                          <div className="flex justify-between">
+                            <span>Recebeu:</span>
+                            <span className="font-bold text-[var(--primary)]">+{formatCurrency(resp.recebido)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Gastou:</span>
+                            <span className="font-bold text-[var(--danger)]">-{formatCurrency(resp.gastou)}</span>
+                          </div>
+                          <div className="flex justify-between pt-1 border-t border-[var(--border)] font-bold">
+                            <span>Saldo:</span>
+                            <span className={resp.saldo >= 0 ? 'text-[var(--primary)]' : 'text-[var(--danger)]'}>
+                              {formatCurrency(resp.saldo)}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
 
-                {/* Barra de Proporção de Gastos */}
-                {responsaveisComparativo.totalGastosJuntos > 0 && (
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex justify-between text-[11px] font-semibold text-[var(--text-secondary)]">
-                      <span>Ahyslla: {responsaveisComparativo.ahysllaPct.toFixed(0)}% dos gastos</span>
-                      <span>Marcos: {responsaveisComparativo.marcosPct.toFixed(0)}% dos gastos</span>
+                {/* Barra de Proporção de Gastos Empilhada */}
+                {responsaveisComparativo.totalGastosTodos > 0 && (
+                  <div className="space-y-2 pt-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-semibold text-[var(--text-secondary)]">
+                      {responsaveisComparativo.responsaveisList.map((resp) => (
+                        <div key={resp.id} className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: resp.color }} />
+                          <span>{resp.shortName}: {resp.gastoPct.toFixed(0)}%</span>
+                        </div>
+                      ))}
                     </div>
                     <div className="w-full h-2.5 bg-[var(--border)] rounded-full overflow-hidden flex">
-                      <div 
-                        className="h-full bg-emerald-500 transition-all duration-300" 
-                        style={{ width: `${responsaveisComparativo.ahysllaPct}%` }}
-                        title={`Ahyslla: ${responsaveisComparativo.ahysllaPct.toFixed(1)}%`}
-                      />
-                      <div 
-                        className="h-full bg-blue-500 transition-all duration-300" 
-                        style={{ width: `${responsaveisComparativo.marcosPct}%` }}
-                        title={`Marcos: ${responsaveisComparativo.marcosPct.toFixed(1)}%`}
-                      />
+                      {responsaveisComparativo.responsaveisList.map((resp) => (
+                        <div 
+                          key={resp.id}
+                          className="h-full transition-all duration-300"
+                          style={{
+                            width: `${resp.gastoPct}%`,
+                            backgroundColor: resp.color
+                          }}
+                          title={`${resp.shortName}: ${resp.gastoPct.toFixed(1)}%`}
+                        />
+                      ))}
                     </div>
                   </div>
                 )}
@@ -1069,6 +1067,7 @@ export default function Analises() {
             )}
 
             {/* 3. CARTÕES DE CRÉDITO: Lista completa e dinâmica */}
+            {cartoesCadastrados.length > 0 && (
             <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-4 shadow-[var(--shadow)] space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
@@ -1157,6 +1156,7 @@ export default function Analises() {
                 ))}
               </div>
             </div>
+            )}
 
             {/* 4. DESTAQUES: Melhor mês, Pior mês e Médias mensais */}
             {destaques && (

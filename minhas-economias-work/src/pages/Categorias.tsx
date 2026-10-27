@@ -1,17 +1,17 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { isSameMonth, subMonths } from 'date-fns';
 import { 
   PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip 
 } from 'recharts';
 import { 
-  Plus, Coffee, ShoppingBag, Wifi, Zap, Heart, BookOpen, Shirt, Tv, Fuel, Droplet, DollarSign, Briefcase, Tag, TrendingUp, TrendingDown 
+  Plus, Coffee, ShoppingBag, Wifi, Zap, Heart, BookOpen, Shirt, Tv, Fuel, Droplet, DollarSign, Tag, TrendingUp, TrendingDown 
 } from 'lucide-react';
 import { useMonth, MonthChips } from '../components/common/MonthContext';
 import { useLancamentos } from '../hooks/useLancamentos';
+import { useCadastros } from '../hooks/useCadastros';
 import { formatCurrency } from '../lib/utils';
 import ResponsavelAvatar from '../components/common/ResponsavelAvatar';
-import { FOTOS_RESPONSAVEIS } from '../lib/constants';
 
 interface CategoryVisual {
   icon: any;
@@ -20,51 +20,51 @@ interface CategoryVisual {
   textClass: string;
 }
 
+const PALETTE = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#64748B'];
+
+const normalizeStr = (s?: string | null) =>
+  s ? s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() : '';
+
+// Mapa de ícones e cores por nome normalizado (sem acentos) para aceitar variações com e sem acento
 const CATEGORY_MAP: Record<string, CategoryVisual> = {
-  'Alimentação': { icon: Coffee, colorHex: '#F97316', bgClass: 'bg-orange-500/15', textClass: 'text-orange-500' },
-  'Mercado Livre': { icon: ShoppingBag, colorHex: '#EAB308', bgClass: 'bg-yellow-500/15', textClass: 'text-yellow-500' },
-  'Internet': { icon: Wifi, colorHex: '#3B82F6', bgClass: 'bg-blue-500/15', textClass: 'text-blue-500' },
-  'Energia': { icon: Zap, colorHex: '#FACC15', bgClass: 'bg-yellow-400/15', textClass: 'text-yellow-400' },
-  'Saúde': { icon: Heart, colorHex: '#EF4444', bgClass: 'bg-red-500/15', textClass: 'text-red-500' },
-  'Estudos': { icon: BookOpen, colorHex: '#A855F7', bgClass: 'bg-purple-500/15', textClass: 'text-purple-500' },
-  'Vestuário': { icon: Shirt, colorHex: '#EC4899', bgClass: 'bg-pink-500/15', textClass: 'text-pink-500' },
-  'Assinaturas digitais': { icon: Tv, colorHex: '#6366F1', bgClass: 'bg-indigo-500/15', textClass: 'text-indigo-500' },
-  'Combustivel': { icon: Fuel, colorHex: '#6B7280', bgClass: 'bg-gray-500/15', textClass: 'text-gray-400' },
-  'Combustível': { icon: Fuel, colorHex: '#6B7280', bgClass: 'bg-gray-500/15', textClass: 'text-gray-400' },
-  'Àgua': { icon: Droplet, colorHex: '#38BDF8', bgClass: 'bg-sky-400/15', textClass: 'text-sky-400' },
-  'Água': { icon: Droplet, colorHex: '#38BDF8', bgClass: 'bg-sky-400/15', textClass: 'text-sky-400' },
-  'Salário': { icon: DollarSign, colorHex: '#10B981', bgClass: 'bg-emerald-500/15', textClass: 'text-emerald-500' },
+  'alimentacao': { icon: Coffee, colorHex: '#F97316', bgClass: 'bg-orange-500/15', textClass: 'text-orange-500' },
+  'mercado livre': { icon: ShoppingBag, colorHex: '#EAB308', bgClass: 'bg-yellow-500/15', textClass: 'text-yellow-500' },
+  'internet': { icon: Wifi, colorHex: '#3B82F6', bgClass: 'bg-blue-500/15', textClass: 'text-blue-500' },
+  'energia': { icon: Zap, colorHex: '#FACC15', bgClass: 'bg-yellow-400/15', textClass: 'text-yellow-400' },
+  'saude': { icon: Heart, colorHex: '#EF4444', bgClass: 'bg-red-500/15', textClass: 'text-red-500' },
+  'estudos': { icon: BookOpen, colorHex: '#A855F7', bgClass: 'bg-purple-500/15', textClass: 'text-purple-500' },
+  'vestuario': { icon: Shirt, colorHex: '#EC4899', bgClass: 'bg-pink-500/15', textClass: 'text-pink-500' },
+  'assinaturas digitais': { icon: Tv, colorHex: '#6366F1', bgClass: 'bg-indigo-500/15', textClass: 'text-indigo-500' },
+  'combustivel': { icon: Fuel, colorHex: '#6B7280', bgClass: 'bg-gray-500/15', textClass: 'text-gray-400' },
+  'agua': { icon: Droplet, colorHex: '#38BDF8', bgClass: 'bg-sky-400/15', textClass: 'text-sky-400' },
+  'salario': { icon: DollarSign, colorHex: '#10B981', bgClass: 'bg-emerald-500/15', textClass: 'text-emerald-500' },
 };
 
-const DEFAULT_CATEGORY_VISUAL: CategoryVisual = {
-  icon: Tag,
-  colorHex: '#94A3B8',
-  bgClass: 'bg-slate-500/15',
-  textClass: 'text-slate-400'
-};
-
-const OUTRAS_VISUAL: CategoryVisual = {
-  icon: Briefcase,
-  colorHex: '#64748B',
-  bgClass: 'bg-slate-600/15',
-  textClass: 'text-slate-400'
-};
-
-const PALETTE = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#64748B'];
+function getCategoryVisual(name: string, index: number): CategoryVisual {
+  const norm = normalizeStr(name);
+  if (CATEGORY_MAP[norm]) {
+    return CATEGORY_MAP[norm];
+  }
+  const color = PALETTE[index % PALETTE.length];
+  return {
+    icon: Tag,
+    colorHex: color,
+    bgClass: 'bg-slate-500/15',
+    textClass: 'text-slate-400',
+  };
+}
 
 export default function Categorias() {
   const navigate = useNavigate();
   const { currentDate } = useMonth();
   const { lancamentos, loading, erro } = useLancamentos();
+  const { responsaveis } = useCadastros();
 
   // 1. Controle "Saídas" (padrão) / "Entradas"
   const [tipoMovimento, setTipoMovimento] = useState<'Saída' | 'Entrada'>('Saída');
 
-  // 2. Chips de responsável: "Todos" (padrão), "Ahyslla", "Marcos"
+  // 2. Chips de responsável: "Todos" (padrão) ou id do responsável
   const [responsavelFiltro, setResponsavelFiltro] = useState<'Todos' | string>('Todos');
-
-  const normalizeStr = (s: string) =>
-    s ? s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() : '';
 
   // Filtro de lançamentos para o mês atual selecionado
   const currentMonthTransactions = useMemo(() => {
@@ -72,13 +72,20 @@ export default function Categorias() {
       if (!isSameMonth(t.data_hora, currentDate)) return false;
       if (t.movimento !== tipoMovimento) return false;
       if (responsavelFiltro !== 'Todos') {
-        const tResp = normalizeStr(t.responsavel || '');
-        const fResp = normalizeStr(responsavelFiltro);
-        if (!tResp.includes(fResp) && !fResp.includes(tResp)) return false;
+        if (t.responsavel_id) {
+          if (t.responsavel_id !== responsavelFiltro) return false;
+        } else {
+          const respObj = responsaveis.find((r) => r.id === responsavelFiltro);
+          if (respObj) {
+            if (normalizeStr(t.responsavel) !== normalizeStr(respObj.nome)) return false;
+          } else {
+            if (normalizeStr(t.responsavel) !== normalizeStr(responsavelFiltro)) return false;
+          }
+        }
       }
       return true;
     });
-  }, [lancamentos, currentDate, tipoMovimento, responsavelFiltro]);
+  }, [lancamentos, currentDate, tipoMovimento, responsavelFiltro, responsaveis]);
 
   // Filtro de lançamentos para o mês anterior (para cálculo de comparação vs. mês anterior)
   const prevMonthDate = useMemo(() => subMonths(currentDate, 1), [currentDate]);
@@ -87,13 +94,20 @@ export default function Categorias() {
       if (!isSameMonth(t.data_hora, prevMonthDate)) return false;
       if (t.movimento !== tipoMovimento) return false;
       if (responsavelFiltro !== 'Todos') {
-        const tResp = normalizeStr(t.responsavel || '');
-        const fResp = normalizeStr(responsavelFiltro);
-        if (!tResp.includes(fResp) && !fResp.includes(tResp)) return false;
+        if (t.responsavel_id) {
+          if (t.responsavel_id !== responsavelFiltro) return false;
+        } else {
+          const respObj = responsaveis.find((r) => r.id === responsavelFiltro);
+          if (respObj) {
+            if (normalizeStr(t.responsavel) !== normalizeStr(respObj.nome)) return false;
+          } else {
+            if (normalizeStr(t.responsavel) !== normalizeStr(responsavelFiltro)) return false;
+          }
+        }
       }
       return true;
     });
-  }, [lancamentos, prevMonthDate, tipoMovimento, responsavelFiltro]);
+  }, [lancamentos, prevMonthDate, tipoMovimento, responsavelFiltro, responsaveis]);
 
   // Total acumulado no mês filtrado
   const totalMes = useMemo(() => {
@@ -121,16 +135,16 @@ export default function Categorias() {
       map.set(cat, existing);
     }
 
-    const items = Array.from(map.entries()).map(([name, data]) => {
+    const items = Array.from(map.entries()).map(([name, data], idx) => {
       const percentage = totalMes > 0 ? (data.total / totalMes) * 100 : 0;
       const prevTotal = prevMapByCat.get(name);
-      
+
       let diffPercent: number | null = null;
       if (prevTotal !== undefined && prevTotal > 0) {
         diffPercent = Math.round(((data.total - prevTotal) / prevTotal) * 100);
       }
 
-      const visual = CATEGORY_MAP[name] || DEFAULT_CATEGORY_VISUAL;
+      const visual = getCategoryVisual(name, idx);
 
       return {
         name,
@@ -139,7 +153,7 @@ export default function Categorias() {
         percentage,
         prevTotal,
         diffPercent,
-        visual
+        visual,
       };
     });
 
@@ -154,14 +168,14 @@ export default function Categorias() {
       return categoriesList.map((c, i) => ({
         name: c.name,
         value: c.total,
-        color: c.visual.colorHex || PALETTE[i % PALETTE.length]
+        color: c.visual.colorHex || PALETTE[i % PALETTE.length],
       }));
     }
 
     const top5 = categoriesList.slice(0, 5).map((c, i) => ({
       name: c.name,
       value: c.total,
-      color: c.visual.colorHex || PALETTE[i % PALETTE.length]
+      color: c.visual.colorHex || PALETTE[i % PALETTE.length],
     }));
 
     const outrasTotal = categoriesList.slice(5).reduce((acc, c) => acc + c.total, 0);
@@ -170,20 +184,14 @@ export default function Categorias() {
       {
         name: 'Outras',
         value: outrasTotal,
-        color: OUTRAS_VISUAL.colorHex
-      }
+        color: '#64748B',
+      },
     ];
   }, [categoriesList]);
 
-  const responsaveisOptions = [
-    { label: 'Todos', value: 'Todos', fullName: '' },
-    { label: 'Ahyslla', value: 'Ahyslla', fullName: 'Ahyslla Vascaina' },
-    { label: 'Marcos', value: 'Marcos', fullName: 'Marcos Andrade' }
-  ];
-
   return (
     <div className="flex flex-col w-full min-h-full pb-32 text-[var(--text-primary)]">
-      {/* 1. Seletor de Meses da Visão Geral (adaptado ao fundo da página) */}
+      {/* 1. Seletor de Meses */}
       <div className="px-4 pt-3 pb-2 w-full">
         <MonthChips variant="surface" />
       </div>
@@ -215,31 +223,37 @@ export default function Categorias() {
           </button>
         </div>
 
-        {/* 3. Chips de Responsável com Avatar */}
+        {/* 3. Chips de Responsável Dinâmicos */}
         <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1">
-          {responsaveisOptions.map((opt) => {
-            const isSelected = responsavelFiltro === opt.value;
-            const fotoUrl = opt.fullName ? FOTOS_RESPONSAVEIS[opt.fullName] : undefined;
+          {/* Chip "Todos" */}
+          <button
+            type="button"
+            onClick={() => setResponsavelFiltro('Todos')}
+            className={`min-h-[44px] px-3.5 rounded-full text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap border shrink-0 ${
+              responsavelFiltro === 'Todos'
+                ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-sm'
+                : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border)] hover:border-[var(--text-secondary)]'
+            }`}
+          >
+            Todos
+          </button>
 
+          {/* Chips dos responsáveis cadastrados */}
+          {responsaveis.map((r) => {
+            const isSelected = responsavelFiltro === r.id;
             return (
               <button
-                key={opt.value}
+                key={r.id}
                 type="button"
-                onClick={() => setResponsavelFiltro(opt.value)}
+                onClick={() => setResponsavelFiltro(r.id)}
                 className={`min-h-[44px] px-3.5 rounded-full text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap border shrink-0 ${
                   isSelected
                     ? 'bg-[var(--primary)] text-white border-[var(--primary)] shadow-sm'
                     : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border)] hover:border-[var(--text-secondary)]'
                 }`}
               >
-                {opt.fullName ? (
-                  <ResponsavelAvatar
-                    name={opt.fullName}
-                    fotoUrl={fotoUrl}
-                    size={24}
-                  />
-                ) : null}
-                <span>{opt.label}</span>
+                <ResponsavelAvatar name={r.nome} fotoUrl={r.foto_url ?? undefined} size={24} />
+                <span>{r.nome}</span>
               </button>
             );
           })}
@@ -261,7 +275,6 @@ export default function Categorias() {
         <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-4 shadow-[var(--shadow)]">
           {categoriesList.length === 0 ? (
             <div className="py-8 flex flex-col items-center justify-center text-center space-y-3">
-              {/* Círculo cinza */}
               <div className="w-36 h-36 rounded-full border-8 border-slate-700/30 flex flex-col items-center justify-center p-3">
                 <span className="text-[11px] font-medium text-[var(--text-secondary)] leading-snug">
                   Sem {tipoMovimento.toLowerCase()}s neste mês
@@ -301,7 +314,7 @@ export default function Categorias() {
                         borderColor: 'var(--border)',
                         borderRadius: '12px',
                         color: 'var(--text-primary)',
-                        fontSize: '12px'
+                        fontSize: '12px',
                       }}
                       itemStyle={{ color: 'var(--text-primary)' }}
                     />
@@ -329,15 +342,13 @@ export default function Categorias() {
               <h2 className="text-sm font-bold text-[var(--text-primary)]">
                 Detalhamento ({categoriesList.length})
               </h2>
-              <span className="text-xs text-[var(--text-secondary)]">
-                % do total
-              </span>
+              <span className="text-xs text-[var(--text-secondary)]">% do total</span>
             </div>
 
             <div className="space-y-2">
               {categoriesList.map((cat) => {
                 const IconComponent = cat.visual.icon;
-                
+
                 // Comparação vs. mês anterior:
                 // Para Saída: aumento (positivo) = gastou mais (vermelho), queda = economizou (verde)
                 // Para Entrada: aumento = recebeu mais (verde), queda = recebeu menos (vermelho)
@@ -384,7 +395,9 @@ export default function Categorias() {
                             {cat.percentage.toFixed(1)}%
                           </span>
                           {cat.diffPercent !== null && (
-                            <span className={`flex items-center font-bold text-[11px] ${diffColorClass}`}>
+                            <span
+                              className={`flex items-center font-bold text-[11px] ${diffColorClass}`}
+                            >
                               {cat.diffPercent > 0 ? (
                                 <>
                                   <TrendingUp size={12} className="mr-0.5" />
@@ -410,7 +423,7 @@ export default function Categorias() {
                         className="h-full rounded-full transition-all duration-300"
                         style={{
                           width: `${Math.min(Math.max(cat.percentage, 1), 100)}%`,
-                          backgroundColor: cat.visual.colorHex
+                          backgroundColor: cat.visual.colorHex,
                         }}
                       />
                     </div>
