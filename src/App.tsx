@@ -15,14 +15,16 @@ import LoginScreen from './components/auth/LoginScreen';
 import { supabaseConfigured } from './lib/supabase';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 
-const Home = lazy(() => import('./pages/Home'));
-const Lancamentos = lazy(() => import('./pages/Lancamentos'));
-const Categorias = lazy(() => import('./pages/Categorias'));
-const Analises = lazy(() => import('./pages/Analises'));
-const NovoLancamento = lazy(() => import('./pages/NovoLancamento'));
-const Configuracoes = lazy(() => import('./pages/Configuracoes'));
-const Privacidade = lazy(() => import('./pages/Privacidade'));
-const Termos = lazy(() => import('./pages/Termos'));
+import { lazyWithRetry } from './lib/lazyWithRetry';
+
+const Home = lazyWithRetry(() => import('./pages/Home'));
+const Lancamentos = lazyWithRetry(() => import('./pages/Lancamentos'));
+const Categorias = lazyWithRetry(() => import('./pages/Categorias'));
+const Analises = lazyWithRetry(() => import('./pages/Analises'));
+const NovoLancamento = lazyWithRetry(() => import('./pages/NovoLancamento'));
+const Configuracoes = lazyWithRetry(() => import('./pages/Configuracoes'));
+const Privacidade = lazyWithRetry(() => import('./pages/Privacidade'));
+const Termos = lazyWithRetry(() => import('./pages/Termos'));
 
 function PageFallback() {
   return (
