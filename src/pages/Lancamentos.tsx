@@ -7,7 +7,6 @@ import {
   Search, X, Filter, Calendar, ArrowUpCircle, ArrowDownCircle, 
   ShoppingBag, Wifi, Coffee, Heart, BookOpen, Shirt, Tv, Zap, Droplet, Fuel, DollarSign, Briefcase, Trash2, Edit2, CheckCircle, Clock, ReceiptText 
 } from 'lucide-react';
-import { ScreenHeader } from '../components/common/ScreenHeader';
 import { format, isToday, isYesterday, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import FormLancamento from '../components/novo/FormLancamento';
@@ -146,7 +145,6 @@ export default function Lancamentos() {
 
   return (
     <div className="flex flex-col h-full bg-[var(--bg-app)]">
-      <ScreenHeader icon={<ReceiptText />} title="Lançamentos" subtitle="Todas as movimentações" />
       
       <div className="sticky top-0 z-30 bg-[var(--bg-app)] border-b border-[var(--border)] px-4 py-2.5 space-y-2.5">
         <div className="relative">
