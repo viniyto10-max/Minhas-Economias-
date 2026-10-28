@@ -2,10 +2,10 @@
   "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "cleanUrls": true,
+  "cleanUrls": false,
   "rewrites": [
     {
-      "source": "/((?!api/|sw\\.js|manifest\\.webmanifest|pwa-.*|apple-touch-icon.*|favicon.*|assets/|avatars/|.*\\..*).*)",
+      "source": "/((?!api/|sw\\.js|manifest\\.webmanifest|pwa-.*|assets/|.*\\..*).*)",
       "destination": "/index.html"
     }
   ],
