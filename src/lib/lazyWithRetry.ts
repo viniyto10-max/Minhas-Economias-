@@ -1,22 +1,21 @@
+import { lazy } from 'react';
+
 export function lazyWithRetry<T>(
-  componentImport: () => Promise<{ default: React.ComponentType<T> }>
+  componentImport: () => Promise<{ default: React.ComponentType<T> }>,
+  retries = 2
 ) {
   return lazy(async () => {
-    try {
-      return await componentImport();
-    } catch (error) {
-      console.error('Lazy loading failed, retrying...', error);
-      // Wait a moment then retry
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      
+    let error;
+    for (let i = 0; i < retries; i++) {
       try {
         return await componentImport();
-      } catch (retryError) {
-        console.error('Retry failed, reloading page', retryError);
-        window.location.reload();
-        throw retryError;
+      } catch (e) {
+        error = e;
+        console.error(`Lazy loading failed (attempt ${i + 1}), retrying...`, e);
+        await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)));
       }
     }
+    console.error('Lazy loading failed after retries', error);
+    throw new Error('Falha ao carregar componente. Verifique sua conexão.');
   });
 }
-import { lazy } from 'react';

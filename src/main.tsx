@@ -8,7 +8,8 @@ if (import.meta.env.PROD) {
   registerSW({
     immediate: true,
     onNeedRefresh() {
-      window.location.reload();
+      // Don't reload immediately, allow user to continue
+      console.log('New content available, please refresh.');
     },
   });
 }

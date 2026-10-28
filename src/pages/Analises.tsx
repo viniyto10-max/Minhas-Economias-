@@ -176,42 +176,47 @@ export default function Analises() {
 
   // Dados mês a mês para os gráficos principais
   const chartMonthlyData = useMemo(() => {
-    let acumulado = 0;
+    try {
+      let acumulado = 0;
 
-    return monthsList.map((monthDate) => {
-      const monthStart = startOfMonth(monthDate);
-      const monthEnd = endOfMonth(monthDate);
+      return monthsList.map((monthDate) => {
+        const monthStart = startOfMonth(monthDate);
+        const monthEnd = endOfMonth(monthDate);
 
-      const itemsInMonth = currentLancamentos.filter((t) => {
-        const d = new Date(t.data_hora);
-        return isWithinInterval(d, { start: monthStart, end: monthEnd });
+        const itemsInMonth = currentLancamentos.filter((t) => {
+          const d = new Date(t.data_hora);
+          return isWithinInterval(d, { start: monthStart, end: monthEnd });
+        });
+
+        const entradas = itemsInMonth
+          .filter((t) => t.movimento === 'Entrada')
+          .reduce((acc, t) => acc + (t.valor || 0), 0);
+
+        const saidas = itemsInMonth
+          .filter((t) => t.movimento === 'Saída')
+          .reduce((acc, t) => acc + (t.valor || 0), 0);
+
+        const saldoMes = entradas - saidas;
+        acumulado += saldoMes;
+
+        const labelRaw = format(monthDate, 'MMM', { locale: ptBR });
+        const label = labelRaw.charAt(0).toUpperCase() + labelRaw.slice(1);
+        const isCurrentMonth = monthDate.getMonth() === now.getMonth() && monthDate.getFullYear() === now.getFullYear();
+
+        return {
+          label,
+          fullLabel: format(monthDate, "MMMM 'de' yyyy", { locale: ptBR }),
+          entradas,
+          saidas,
+          saldoMes,
+          saldoAcumulado: acumulado,
+          isCurrentMonth
+        };
       });
-
-      const entradas = itemsInMonth
-        .filter((t) => t.movimento === 'Entrada')
-        .reduce((acc, t) => acc + (t.valor || 0), 0);
-
-      const saidas = itemsInMonth
-        .filter((t) => t.movimento === 'Saída')
-        .reduce((acc, t) => acc + (t.valor || 0), 0);
-
-      const saldoMes = entradas - saidas;
-      acumulado += saldoMes;
-
-      const labelRaw = format(monthDate, 'MMM', { locale: ptBR });
-      const label = labelRaw.charAt(0).toUpperCase() + labelRaw.slice(1);
-      const isCurrentMonth = monthDate.getMonth() === now.getMonth() && monthDate.getFullYear() === now.getFullYear();
-
-      return {
-        label,
-        fullLabel: format(monthDate, "MMMM 'de' yyyy", { locale: ptBR }),
-        entradas,
-        saidas,
-        saldoMes,
-        saldoAcumulado: acumulado,
-        isCurrentMonth
-      };
-    });
+    } catch (e) {
+      console.error('Erro ao calcular chartMonthlyData:', e);
+      return [];
+    }
   }, [monthsList, currentLancamentos, now]);
 
   // ==========================================
