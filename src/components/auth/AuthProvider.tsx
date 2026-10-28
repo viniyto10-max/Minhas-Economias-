@@ -59,11 +59,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = async () => {
     if (!supabase) throw new Error('Supabase não configurado.');
-    const { error } = await supabase.auth.signInWithOAuth({ 
-      provider: 'google', 
-      options: { redirectTo: window.location.origin } 
-    });
-    if (error) throw new Error('Não foi possível iniciar o login: ' + error.message);
+    
+    const isIframe = window.self !== window.top;
+    if (isIframe) {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+          skipBrowserRedirect: true
+        }
+      });
+      if (error) throw new Error('Não foi possível iniciar o login: ' + error.message);
+      if (data?.url) {
+        window.open(data.url, '_blank');
+      }
+    } else {
+      const { error } = await supabase.auth.signInWithOAuth({ 
+        provider: 'google', 
+        options: { redirectTo: window.location.origin } 
+      });
+      if (error) throw new Error('Não foi possível iniciar o login: ' + error.message);
+    }
   };
 
   return (
